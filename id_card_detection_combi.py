@@ -5,8 +5,10 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import sys
+import time
 
 from PIL import Image
+
 
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
@@ -17,7 +19,6 @@ from utils import visualization_utils as vis_util
 
 # Name of the directory containing the object detection module we're using
 MODEL_NAME = 'model'
-IMAGE_NAME = 'test_images/image1.jpg'
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
@@ -29,13 +30,10 @@ PATH_TO_CKPT = os.path.join(CWD_PATH,MODEL_NAME,'frozen_inference_graph.pb')
 # Path to label map file
 PATH_TO_LABELS = os.path.join(CWD_PATH,'data','labelmap.pbtxt')
 
-# Path to image
-PATH_TO_IMAGE = os.path.join(CWD_PATH,IMAGE_NAME)
-
 # Number of classes the object detector can identify
 NUM_CLASSES = 1
 
-# Load the label map.
+## Load the label map.
 # Label maps map indices to category names, so that when our convolution
 # network predicts `5`, we know that this corresponds to `king`.
 # Here we use internal utility functions, but anything that returns a
@@ -55,6 +53,7 @@ with detection_graph.as_default():
 
     sess = tf.compat.v1.Session(graph=detection_graph)
 
+
 # Define input and output tensors (i.e. data) for the object detection classifier
 
 # Input tensor is the image
@@ -72,52 +71,65 @@ detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
 # Number of objects detected
 num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 
-# Load image using OpenCV and
-# expand image dimensions to have shape: [1, None, None, 3]
-# i.e. a single-column array, where each item in the column has the pixel RGB value
-image = cv2.imread(PATH_TO_IMAGE)
-image_expanded = np.expand_dims(image, axis=0)
+# Initialize webcam feed
+video = cv2.VideoCapture(0)
+ret = video.set(3,1280)
+ret = video.set(4,720)
 
-# Perform the actual detection by running the model with the image as input
-(boxes, scores, classes, num) = sess.run(
-    [detection_boxes, detection_scores, detection_classes, num_detections],
-    feed_dict={image_tensor: image_expanded})
+searching = True
 
-# Draw the results of the detection (aka 'visulaize the results')
-image, array_coord = vis_util.visualize_boxes_and_labels_on_image_array(
-    image,
-    np.squeeze(boxes),
-    np.squeeze(classes).astype(np.int32),
-    np.squeeze(scores),
-    category_index,
-    use_normalized_coordinates=True,
-    line_thickness=3,
-    min_score_thresh=0.60)
+while(searching):
+    time.sleep(0.5)
 
-ymin, xmin, ymax, xmax = array_coord
+    # Acquire frame and expand frame dimensions to have shape: [1, None, None, 3]
+    # i.e. a single-column array, where each item in the column has the pixel RGB value
+    ret, frame = video.read()
+    frame_expanded = np.expand_dims(frame, axis=0)
 
-shape = np.shape(image)
-im_width, im_height = shape[1], shape[0]
-(left, right, top, bottom) = (xmin * im_width, xmax * im_width, ymin * im_height, ymax * im_height)
+    # Perform the actual detection by running the model with the image as input
+    (boxes, scores, classes, num) = sess.run(
+        [detection_boxes, detection_scores, detection_classes, num_detections],
+        feed_dict={image_tensor: frame_expanded})
 
-image_path = os.getcwd() +"/"+ IMAGE_NAME
-print(image_path)
-output_path = os.getcwd() +"/"+ "output/test2.png"
+    if np.where(scores[0] > 0.9)[0] == 0:
+        searching = False
 
-# Using Image to crop and save the extracted copied image
-im = Image.open(image_path)
-im.crop((left, top, right, bottom)).save(output_path, quality=95)
+        frame, array_coord = vis_util.visualize_boxes_and_labels_on_image_array(
+        frame,
+        np.squeeze(boxes),
+        np.squeeze(classes).astype(np.int32),
+        np.squeeze(scores),
+        category_index,
+        use_normalized_coordinates=True,
+        line_thickness=3,
+        min_score_thresh=0.60)
 
-cv2.imshow('ID-CARD-DETECTOR : ', image)
+        ymin, xmin, ymax, xmax = array_coord
 
-image_cropped = cv2.imread(output_path)
-cv2.imshow("ID-CARD-CROPPED : ", image_cropped)
+        shape = np.shape(frame)
+        im_width, im_height = shape[1], shape[0]
+        (left, right, top, bottom) = (xmin * im_width, xmax * im_width, ymin * im_height, ymax * im_height)
 
-# All the results have been drawn on image. Now display the image.
-cv2.imshow('ID CARD DETECTOR', image)
+        frame_path = os.getcwd() +"/"+ "output/frame.png"
+        cv2.imwrite(frame_path, frame)
 
-# Press any key to close the image
-cv2.waitKey(0)
+        output_path = os.getcwd() +"/"+ "output/test2.png"
+
+        # Using Image to crop and save the extracted copied image
+        #im = Image.open(image_path)
+        frameim = Image.open(frame_path)
+        frameim.crop((left, top, right, bottom)).save(output_path, quality=95)
+
+        #image_frame = cv2.imread(frame_path)
+        #cv2.imshow('ID-CARD-DETECTOR : ', image_frame)
+
+        image_cropped = cv2.imread(output_path)
+        cv2.imshow("ID-CARD-CROPPED : ", image_cropped)
+
+        cv2.waitKey(0)
+
 
 # Clean up
-cv2.destroyAllWindows()
+#video.release()
+#cv2.destroyAllWindows()
+

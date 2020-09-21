@@ -103,5 +103,5 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-/output/
-/test_images/
+/output/*
+/test_images/*
